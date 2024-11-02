@@ -42,11 +42,17 @@ def __():
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import accuracy_score, classification_report
     from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.svm import SVC
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier
 
     import xgboost as xgb
     return (
+        ExtraTreesClassifier,
+        GradientBoostingClassifier,
         KNeighborsClassifier,
         LabelEncoder,
+        RandomForestClassifier,
+        SVC,
         StandardScaler,
         accuracy_score,
         alt,
@@ -62,7 +68,7 @@ def __():
 
 @app.cell(hide_code=True)
 def __(mo):
-    mo.md(r"""## Data Exploration""")
+    mo.md(r"""## 1. Data Exploration""")
     return
 
 
@@ -110,36 +116,45 @@ def __(df):
     return
 
 
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md("""## 2. Correlation Analysis""")
+    return
+
+
 @app.cell
 def __(df, pd):
     columns = df.columns
-    continuous_columns_y = [
+    continuous_columns = [
         col for col in columns if (pd.api.types.is_numeric_dtype(df[col]) and df[col].nunique() > 10)
     ]
-    return columns, continuous_columns_y
+    return columns, continuous_columns
 
 
 @app.cell
-def __(columns, mo):
-    x_scatter = mo.ui.dropdown(columns, value=columns[0])
-    y_scatter = mo.ui.dropdown(columns, value=columns[1])
+def __(continuous_columns, mo):
+    x_scatter = mo.ui.dropdown(continuous_columns, value=continuous_columns[0])
+    y_scatter = mo.ui.dropdown(continuous_columns, value=continuous_columns[1])
     return x_scatter, y_scatter
 
 
-@app.cell
+@app.cell(hide_code=True)
 def __(mo, x_scatter, y_scatter):
     mo.md(f"""
-    #### Variable yang akan diplot pada `scatterplot`
+    ### Scatter Plot Continuous Variables
+
+    Variable yang akan diplot pada `scatterplot`
 
     x: {x_scatter} &nbsp;
     y: {y_scatter}
+
     """)
     return
 
 
 @app.cell(hide_code=True)
 def __(alt, df, mo, x_scatter, y_scatter):
-    brush = alt.selection_point(encodings=["x"])
+    # brush = alt.selection_point(encodings=["x"])
 
     scatter_bar_chart = (alt.Chart(df)
                           .mark_point()
@@ -147,15 +162,50 @@ def __(alt, df, mo, x_scatter, y_scatter):
                               x=x_scatter.value,
                               y=y_scatter.value,
                               color='Diagnosis')
-                          .add_params(brush)
+                          # .add_params(brush)
                          )
     scatter_bar_chart = mo.ui.altair_chart(scatter_bar_chart)
-    return brush, scatter_bar_chart
+    return (scatter_bar_chart,)
 
 
 @app.cell(hide_code=True)
 def __(mo, scatter_bar_chart):
     mo.vstack([scatter_bar_chart, scatter_bar_chart.value.head()])
+    return
+
+
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md("""### Heatmap Correlation""")
+    return
+
+
+@app.cell
+def __(df):
+    correlation_matrix = df.corr()
+    correlation_melted = correlation_matrix.reset_index().melt(id_vars='index')
+    correlation_melted.columns = ['Variable1', 'Variable2', 'Correlation']
+    return correlation_matrix, correlation_melted
+
+
+@app.cell
+def __(alt, correlation_melted):
+    alt.Chart(correlation_melted).mark_rect().encode(
+        x='Variable1:O',
+        y='Variable2:O',
+        color='Correlation:Q',
+        tooltip=['Variable1', 'Variable2', 'Correlation']
+    ).properties(
+        width=420,
+        height=420,
+        title='Correlation Heatmap'
+    ).interactive()
+    return
+
+
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md(r"""## 3. Model Construction""")
     return
 
 
@@ -216,7 +266,7 @@ def __(X_train_scaled):
 def __(mo):
     mo.md(
         r"""
-        ## Membuat Model
+        ### Membuat Model
 
         Model yang akan dibuat disini adalah **XgBoost** dan **KNN (K Nearest Neighbors)**
         """
@@ -232,7 +282,7 @@ def __(accuracy_score, mo):
         accuracy = accuracy_score(y_test, y_pred)
         return accuracy
 
-    mo.md("Fungssi Model Evaluation")
+    mo.md("Fungsi Model Evaluation")
     return (evaluate_model,)
 
 
@@ -252,12 +302,35 @@ def __(mo, neighbors):
 
 
 @app.cell
-def __(KNeighborsClassifier, neighbors, xgb):
+def __():
+    return
+
+
+@app.cell
+def __(
+    ExtraTreesClassifier,
+    GradientBoostingClassifier,
+    KNeighborsClassifier,
+    RandomForestClassifier,
+    SVC,
+    neighbors,
+    xgb,
+):
     models = {
         "XGBoost": xgb.XGBClassifier(),
         "KNN": KNeighborsClassifier(n_neighbors=neighbors.value),
+        "SVC": SVC(),
+        "Random Forest": RandomForestClassifier(),
+        "Gradient Boosting": GradientBoostingClassifier(),
+        "Extra Tree": ExtraTreesClassifier()
     }
     return (models,)
+
+
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md(r"""## 4. Model Evaluation""")
+    return
 
 
 @app.cell(hide_code=True)
@@ -280,7 +353,7 @@ def __(pd, results):
 
 @app.cell
 def __(alt, mo, results_df):
-    bar_accuracy = mo.ui.altair_chart(
+    mo.ui.altair_chart(
         alt.Chart(results_df, width=300)
         .mark_bar(fill='#4c78a8')
         .encode(
@@ -288,12 +361,18 @@ def __(alt, mo, results_df):
             y='Accuracy'
         )
     )
-    bar_accuracy
-    return (bar_accuracy,)
+    return
 
 
-@app.cell
-def __():
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md(
+        """
+        ## 5. Kesimpulan
+
+        Model dengan basis `decision tree` memiliki performa yang cenderung baik. Model seperti `KNN` dan `SVC` yang mana basisnya adalah jarak memiliki performa yang sangat buruk, akurasi tidak mencapai 70%, sedangkan model dengan basis `decision tree` mencapai akurasi di atas 80%. Apalagi untuk `Random Forest`, `XgBoost`, dan `Gradient Boosting`, hampir mencapai 95%.
+        """
+    )
     return
 
 
